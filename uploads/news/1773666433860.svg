@@ -1,0 +1,13 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="50" cy="50" r="20" fill="#FF8800" />
+  <g fill="#FF8800">
+    <path d="M50 5 L55 25 L45 25 Z" /> <!-- Top -->
+    <path d="M50 95 L55 75 L45 75 Z" /> <!-- Bottom -->
+    <path d="M5 50 L25 55 L25 45 Z" /> <!-- Left -->
+    <path d="M95 50 L75 55 L75 45 Z" /> <!-- Right -->
+    <path d="M18 18 L32 32 L25 39 Z" transform="rotate(-45 50 50)" />
+    <path d="M18 18 L32 32 L25 39 Z" transform="rotate(45 50 50)" />
+    <path d="M18 18 L32 32 L25 39 Z" transform="rotate(135 50 50)" />
+    <path d="M18 18 L32 32 L25 39 Z" transform="rotate(225 50 50)" />
+  </g>
+</svg>
