@@ -1,5 +1,5 @@
 // ==========================================================
-// 🌞 Hope Energy Backend Server (Production Optimized)
+// 🌞 Hope Energy Backend Server (Cloudinary Integrated)
 // ==========================================================
 
 import express from "express";
@@ -7,10 +7,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import bcrypt from "bcrypt";
+import { v2 as cloudinary } from 'cloudinary'; // 1. Added Cloudinary
 import helmet from "helmet"; 
 import db from "./config/db.js";
-import verifyToken from "./middleware/auth.js";
 
 // ✅ Route Imports
 import projectsRoute from "./routes/projects.js";
@@ -33,30 +32,33 @@ dotenv.config();
 const app = express();
 
 // ==========================================================
-// ⚙️ Configuration & Middleware
+// ⚙️ Cloudinary Configuration
 // ==========================================================
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
+// ==========================================================
+// 🛡️ Middleware
+// ==========================================================
 app.use(helmet({
   crossOriginResourcePolicy: false, 
 }));
 
-// 🌍 Enhanced CORS Logic
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
-  "https://hope-energy-frontend-rho.vercel.app" // Hardcoded as fallback
+  "https://hope-energy-frontend-rho.vercel.app"
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-    
-    // Check if origin is in allowed list OR matches the FRONTEND_URL env
     if (allowedOrigins.indexOf(origin) !== -1 || origin === process.env.FRONTEND_URL) {
       callback(null, true);
     } else {
-      console.log("Blocked by CORS:", origin); // Helps you debug in Render logs
       callback(new Error("Not allowed by CORS"));
     }
   },
@@ -68,26 +70,24 @@ app.use(cors({
 app.use(express.json());
 
 // ==========================================================
-// 📂 Static File Serving
+// 📂 Static & File Pathing
 // ==========================================================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// NOTE: We keep this temporarily so old local images don't break immediately,
+// but new uploads will go to Cloudinary.
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ==========================================================
-// 🧠 Database Connectivity Check (TiDB Cloud)
+// 🧠 Database Connectivity (TiDB Cloud)
 // ==========================================================
 const checkConnection = async () => {
   try {
-    // Use a simple query to verify connection
     await db.query("SELECT 1");
     console.log("✅ TiDB Cloud connected successfully!");
   } catch (err) {
     console.error("❌ TiDB Connection Error:", err.message);
-    // Important: check if it's an IP whitelist error
-    if (err.message.includes("is not allowed to connect")) {
-       console.error("👉 ACTION REQUIRED: Add 0.0.0.0/0 to TiDB Cloud IP Access List.");
-    }
     setTimeout(checkConnection, 5000);
   }
 };
@@ -102,6 +102,7 @@ app.use("/api/contact", contactRoute);
 app.use("/api/services", servicesRoute);
 app.use("/api/about", aboutRoute);
 
+// Admin Routes (These will need the upload middleware in their respective files)
 app.use("/api/admin/auth", adminAuth);
 app.use("/api/admin/services", adminServices);
 app.use("/api/admin/partners", adminPartners);
@@ -112,9 +113,8 @@ app.use("/api/admin/contact_submissions", adminContactSubmissions);
 app.use("/api/admin/news", adminNews);
 app.use("/api/admin/projects", adminProjects);
 
-// Health check endpoint
 app.get("/", (req, res) => {
-  res.send("🌞 Hope Energy Backend is Live!");
+  res.send("🌞 Hope Energy Backend with Cloudinary is Live!");
 });
 
 const PORT = process.env.PORT || 4000;
