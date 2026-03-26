@@ -3,30 +3,41 @@ import db from "../../config/db.js";
 import auth from "../../middleware/auth.js";
 import multer from "multer";
 import path from "path";
-import { fileURLToPath } from "url";
+import fs from "fs";
 
 const router = express.Router();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
-// ✅ Setup image upload folder
-const upload = multer({
-  dest: path.join(__dirname, "../../uploads/team/"),
-  limits: { fileSize: 10 * 1024 * 1024 },
+// ✅ 1. Ensure Team upload folder exists (Same as Partner logic)
+const uploadDir = path.join(process.cwd(), "uploads/team");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// ✅ 2. Use diskStorage (This keeps the .jpg/.png extension)
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    // This creates a unique name: 17123456789-photo.jpg
+    const uniqueName = Date.now() + "-" + file.originalname;
+    cb(null, uniqueName);
+  },
 });
 
-// ✅ Helper to format full image URL
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
+
+// ✅ 3. Helper to format full image URL (Forced HTTPS for Vercel)
 const formatImageURL = (req, imagePath) => {
   if (!imagePath) return null;
-  if (imagePath.startsWith("/uploads")) {
-    return `${req.protocol}://${req.get("host")}${imagePath}`;
-  } else if (imagePath.startsWith("team/")) {
-    return `${req.protocol}://${req.get("host")}/uploads/${imagePath}`;
-  }
-  return imagePath;
+  // We use 'https' instead of req.protocol to fix the Vercel Mixed Content error
+  return `https://${req.get("host")}${imagePath}`;
 };
 
-// ✅ Get all team members (Admin)
+// ✅ GET all team members
 router.get("/", auth, async (req, res) => {
   try {
     const [rows] = await db.query("SELECT * FROM team_members ORDER BY id DESC");
@@ -41,13 +52,13 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
-// ✅ Add new member
+// ✅ Add new member (POST)
 router.post("/", auth, upload.single("image"), async (req, res) => {
   try {
     const { name, position, qualifications } = req.body;
-    let image = req.file
-      ? `/uploads/team/${req.file.filename}`
-      : req.body.image || null;
+    
+    // Logic matches your Partner code now
+    const image = req.file ? `/uploads/team/${req.file.filename}` : null;
 
     if (!name || !position) {
       return res.status(400).json({ message: "Name and position are required" });
@@ -58,10 +69,7 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
       [name, position, qualifications || "", image]
     );
 
-    const [rows] = await db.query("SELECT * FROM team_members WHERE id = ?", [
-      result.insertId,
-    ]);
-
+    const [rows] = await db.query("SELECT * FROM team_members WHERE id = ?", [result.insertId]);
     const newMember = rows[0];
     newMember.image = formatImageURL(req, newMember.image);
 
@@ -72,43 +80,26 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
   }
 });
 
-// ✅ Update member
+// ✅ Update member (PUT)
 router.put("/:id", auth, upload.single("image"), async (req, res) => {
   try {
     const { name, position, qualifications } = req.body;
-    let image = req.file
-      ? `/uploads/team/${req.file.filename}`
-      : req.body.image || null;
-
-    if (!name || !position) {
-      return res.status(400).json({ message: "Name and position are required" });
-    }
+    
+    // Check if a new file was uploaded, otherwise keep old image string
+    let image = req.file ? `/uploads/team/${req.file.filename}` : req.body.image;
 
     await db.query(
       "UPDATE team_members SET name = ?, position = ?, qualifications = ?, image = ? WHERE id = ?",
       [name, position, qualifications || "", image, req.params.id]
     );
 
-    const [rows] = await db.query("SELECT * FROM team_members WHERE id = ?", [
-      req.params.id,
-    ]);
+    const [rows] = await db.query("SELECT * FROM team_members WHERE id = ?", [req.params.id]);
     const updated = rows[0];
     updated.image = formatImageURL(req, updated.image);
 
     res.json(updated);
   } catch (err) {
     console.error("❌ Error updating member:", err.message);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// ✅ Delete member
-router.delete("/:id", auth, async (req, res) => {
-  try {
-    await db.query("DELETE FROM team_members WHERE id = ?", [req.params.id]);
-    res.json({ message: "Member deleted successfully" });
-  } catch (err) {
-    console.error("❌ Error deleting member:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });
