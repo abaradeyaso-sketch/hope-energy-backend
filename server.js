@@ -1,5 +1,5 @@
 // ==========================================================
-// 🌞 Hope Energy Backend Server (Local Storage Mode)
+// 🌞 Hope Energy Backend Server (Full Corrected Version)
 // ==========================================================
 
 import express from "express";
@@ -11,10 +11,10 @@ import helmet from "helmet";
 import db from "./config/db.js";
 
 // ✅ Route Imports
-import projectsRoute from "./routes/projects.js";
-import newsRoute from "./routes/news.js";
+import projectsRoute from "./routes/admin/projects.js"; // Unified
+import newsRoute from "./routes/admin/news.js";         // Unified
 import contactRoute from "./routes/contact.js";
-import servicesRoute from "./routes/services.js";
+import servicesRoute from "./routes/admin/services.js"; // Unified
 import aboutRoute from "./routes/aboutRoutes.js";
 
 import adminAuth from "./routes/admin/auth.js";
@@ -60,12 +60,11 @@ app.use(cors({
 app.use(express.json());
 
 // ==========================================================
-// 📂 Static File Pathing (For Partner & Team Images)
+// 📂 Static File Pathing
 // ==========================================================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// This serves your /uploads/partners and /uploads/team folders
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ==========================================================
@@ -83,24 +82,25 @@ const checkConnection = async () => {
 checkConnection();
 
 // ==========================================================
-// 🌐 API Routes
+// 🌐 API Routes (Unified for Public & Admin)
 // ==========================================================
+
+// Public & Admin Routes (Pointing to the same logic files)
 app.use("/api/projects", projectsRoute);
 app.use("/api/news", newsRoute);
 app.use("/api/contact", contactRoute);
 app.use("/api/services", servicesRoute);
 app.use("/api/about", aboutRoute);
 
-// Admin Routes
 app.use("/api/admin/auth", adminAuth);
-app.use("/api/admin/services", adminServices);
+app.use("/api/admin/services", servicesRoute);
 app.use("/api/admin/partners", adminPartners);
 app.use("/api/admin/team_members", adminTeamMembers);
 app.use("/api/admin/testimonials", adminTestimonials);
 app.use("/api/admin/about_info", adminAboutInfo);
 app.use("/api/admin/contact_submissions", adminContactSubmissions);
-app.use("/api/admin/news", adminNews);
-app.use("/api/admin/projects", adminProjects);
+app.use("/api/admin/news", newsRoute);
+app.use("/api/admin/projects", projectsRoute);
 
 app.get("/", (req, res) => {
   res.send("🌞 Hope Energy Backend is Live!");
