@@ -1,10 +1,9 @@
 import express from "express";
-import db from "../config/db.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs"; 
-import db from "../../config/db.js";
-import auth from "../../middleware/auth.js";
+import db from "../config/db.js"; // Corrected path & removed duplicate
+import auth from "../middleware/auth.js";
 
 const router = express.Router();
 
