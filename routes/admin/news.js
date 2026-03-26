@@ -7,30 +7,26 @@ import fs from "fs";
 
 const router = express.Router();
 
-// ✅ 1. Folder Management
 const uploadDir = path.join(process.cwd(), "uploads/news");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// ✅ 2. Multer Setup
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
   },
 });
+const upload = multer({ storage });
 
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
-
-// ✅ 3. Helper for HTTPS URLs
 const formatImageURL = (req, imagePath) => {
   if (!imagePath) return null;
   if (imagePath.startsWith("http")) return imagePath;
   return `https://${req.get("host")}${imagePath}`;
 };
 
-// ✅ GET all news (Removed 'auth' so public can see)
+// ✅ PUBLIC GET: Removed 'auth'
 router.get("/", async (req, res) => {
   try {
     const [rows] = await db.query("SELECT * FROM news ORDER BY id DESC");
@@ -44,7 +40,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ Add news
+// ✅ ADMIN POST
 router.post("/", auth, upload.single("image"), async (req, res) => {
   try {
     const { title, content, author, is_published = 1 } = req.body;
@@ -54,17 +50,13 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
       "INSERT INTO news (title, content, author, image_url, is_published) VALUES (?, ?, ?, ?, ?)",
       [title, content, author, image_url, is_published]
     );
-
-    res.json({
-      id: result.insertId,
-      image_url: formatImageURL(req, image_url)
-    });
+    res.json({ id: result.insertId, image_url: formatImageURL(req, image_url) });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
 });
 
-// ✅ Update news
+// ✅ ADMIN PUT
 router.put("/:id", auth, upload.single("image"), async (req, res) => {
   try {
     const { title, content, author, is_published = 1 } = req.body;
@@ -74,8 +66,7 @@ router.put("/:id", auth, upload.single("image"), async (req, res) => {
       "UPDATE news SET title = ?, content = ?, author = ?, image_url = ?, is_published = ? WHERE id = ?",
       [title, content, author, image_url, is_published, req.params.id]
     );
-
-    res.json({ message: "Updated successfully" });
+    res.json({ message: "✅ News updated" });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
@@ -84,7 +75,7 @@ router.put("/:id", auth, upload.single("image"), async (req, res) => {
 router.delete("/:id", auth, async (req, res) => {
   try {
     await db.query("DELETE FROM news WHERE id = ?", [req.params.id]);
-    res.json({ message: "Deleted" });
+    res.json({ message: "✅ Deleted" });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
