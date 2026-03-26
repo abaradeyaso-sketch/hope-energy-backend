@@ -1,33 +1,52 @@
 import express from "express";
 import multer from "multer";
 import path from "path";
+import fs from "fs"; 
 import db from "../config/db.js";
 import auth from "../middleware/auth.js";
 
 const router = express.Router();
 
-// 🖼 Configure file upload for project images
+// ✅ 1. Ensure Projects upload folder exists (Match Partner Logic)
+const uploadDir = path.join(process.cwd(), "uploads/projects");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// ✅ 2. Configure multer storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, "uploads/projects/");
+    cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
-    const uniqueName = Date.now() + path.extname(file.originalname);
+    const uniqueName = Date.now() + "-" + file.originalname;
     cb(null, uniqueName);
   },
 });
 
 const upload = multer({ storage });
 
+// ✅ Helper to format full image URL (Forces HTTPS for Vercel)
+const formatProjectURL = (req, imagePath) => {
+  if (!imagePath) return null;
+  // If it's already a full URL, return it; otherwise, build the HTTPS link
+  if (imagePath.startsWith("http")) return imagePath;
+  return `https://${req.get("host")}${imagePath}`;
+};
+
 /* ===========================
-   🌍 Public Routes
+    🌍 Public Routes
 =========================== */
 
 // ➤ Get all projects (public)
 router.get("/", async (req, res) => {
   try {
     const [rows] = await db.query("SELECT * FROM projects ORDER BY id DESC");
-    res.json(rows);
+    const formatted = rows.map((p) => ({
+      ...p,
+      images: formatProjectURL(req, p.images),
+    }));
+    res.json(formatted);
   } catch (err) {
     console.error("❌ Get projects error:", err);
     res.status(500).json({ message: "Failed to fetch projects" });
@@ -39,7 +58,11 @@ router.get("/:id", async (req, res) => {
   try {
     const [rows] = await db.query("SELECT * FROM projects WHERE id = ?", [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ message: "Project not found" });
-    res.json(rows[0]);
+    
+    const project = rows[0];
+    project.images = formatProjectURL(req, project.images);
+    
+    res.json(project);
   } catch (err) {
     console.error("❌ Get single project error:", err);
     res.status(500).json({ message: "Failed to fetch project" });
@@ -47,7 +70,7 @@ router.get("/:id", async (req, res) => {
 });
 
 /* ===========================
-   🔐 Admin Protected Routes
+    🔐 Admin Protected Routes
 =========================== */
 
 // ➕ Add new project
@@ -61,7 +84,12 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
       [title, description, imagePath]
     );
 
-    res.json({ id: result.insertId, title, description, images: imagePath });
+    res.json({ 
+        id: result.insertId, 
+        title, 
+        description, 
+        images: formatProjectURL(req, imagePath) 
+    });
   } catch (err) {
     console.error("❌ Add project error:", err);
     res.status(500).json({ message: "Failed to add project" });
@@ -72,19 +100,19 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
 router.put("/:id", auth, upload.single("image"), async (req, res) => {
   try {
     const { title, description } = req.body;
-    let query, params;
+    // Use new file if uploaded, otherwise use the existing image path from body
+    let imagePath = req.file ? `/uploads/projects/${req.file.filename}` : req.body.images;
 
-    if (req.file) {
-      const imagePath = `/uploads/projects/${req.file.filename}`;
-      query = "UPDATE projects SET title = ?, description = ?, images = ? WHERE id = ?";
-      params = [title, description, imagePath, req.params.id];
-    } else {
-      query = "UPDATE projects SET title = ?, description = ? WHERE id = ?";
-      params = [title, description, req.params.id];
-    }
+    await db.query(
+      "UPDATE projects SET title = ?, description = ?, images = ? WHERE id = ?",
+      [title, description, imagePath, req.params.id]
+    );
 
-    await db.query(query, params);
-    res.json({ message: "Project updated successfully" });
+    const [rows] = await db.query("SELECT * FROM projects WHERE id = ?", [req.params.id]);
+    const updated = rows[0];
+    updated.images = formatProjectURL(req, updated.images);
+
+    res.json(updated);
   } catch (err) {
     console.error("❌ Update project error:", err);
     res.status(500).json({ message: "Failed to update project" });
