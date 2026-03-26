@@ -7,13 +7,11 @@ import auth from "../../middleware/auth.js";
 
 const router = express.Router();
 
-// ✅ 1. Folder Management
 const uploadDir = path.join(process.cwd(), "uploads/projects");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// ✅ 2. Multer Setup
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
@@ -23,101 +21,73 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// ✅ 3. Safety-First Helper for URLs
+// ✅ SAFE URL HELPER: Fixes 500 error and Mixed Content
 const formatImageURL = (req, imagePath) => {
   if (!imagePath) return null;
-  
   let cleanPath = imagePath;
 
-  // Safety Check: If it's a JSON string, parse it. If not, keep it as is.
+  // Try to parse if it's a JSON string, otherwise use as is
   if (typeof imagePath === "string" && imagePath.startsWith("[")) {
     try {
       const parsed = JSON.parse(imagePath);
       cleanPath = Array.isArray(parsed) ? parsed[0] : imagePath;
     } catch (e) {
-      cleanPath = imagePath; // Fallback if parsing fails
+      cleanPath = imagePath;
     }
   }
 
-  if (!cleanPath) return null;
+  if (!cleanPath || cleanPath === "null") return null;
   if (cleanPath.startsWith("http")) return cleanPath;
   
-  // Ensure the path starts with a /
-  const finalPath = cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
-  return `https://${req.get("host")}${finalPath}`;
+  const host = req.get("host");
+  // Force HTTPS for Render/Vercel environments
+  return `https://${host}${cleanPath.startsWith("/") ? cleanPath : "/" + cleanPath}`;
 };
 
-// ✅ GET all projects (Public Access)
+// ✅ GET: PUBLIC (Fixes 401/Data Zero)
 router.get("/", async (req, res) => {
   try {
     const [rows] = await db.query("SELECT * FROM projects ORDER BY id DESC");
-    
-    // Safety Check: Ensure 'images' or 'image_url' column exists
-    const projects = rows.map((p) => {
-      // Logic to handle both possible column names: 'images' or 'image_url'
-      const rawPath = p.images || p.image_url || null;
-      return {
-        ...p,
-        images: formatImageURL(req, rawPath)
-      };
-    });
-    
-    res.json(projects);
+    const formatted = rows.map((p) => ({
+      ...p,
+      images: formatImageURL(req, p.images || p.image_url) 
+    }));
+    res.json(formatted);
   } catch (err) {
-    console.error("❌ Database Error in GET /projects:", err.message);
-    res.status(500).json({ message: "Server error fetching projects", error: err.message });
+    console.error("❌ Projects GET Error:", err.message);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-// ✅ POST new project
+// ✅ POST: ADMIN
 router.post("/", auth, upload.single("image"), async (req, res) => {
   try {
     const { title, description } = req.body;
     const imagePath = req.file ? `/uploads/projects/${req.file.filename}` : null;
-
-    // We store as a JSON string to keep your current DB format
     const [result] = await db.query(
       "INSERT INTO projects (title, description, images) VALUES (?, ?, ?)",
       [title, description, JSON.stringify([imagePath])]
     );
-
-    res.json({
-      id: result.insertId,
-      title,
-      description,
-      images: formatImageURL(req, imagePath),
-    });
+    res.json({ id: result.insertId, message: "Success" });
   } catch (err) {
-    console.error("❌ POST Error:", err.message);
-    res.status(500).json({ message: "Server error adding project" });
+    res.status(500).json({ message: "Error" });
   }
 });
 
-// ✅ PUT update project
+// ✅ PUT: ADMIN
 router.put("/:id", auth, upload.single("image"), async (req, res) => {
   try {
     const { title, description } = req.body;
-    let imagePath = req.file ? `/uploads/projects/${req.file.filename}` : req.body.image_url;
-
-    await db.query(
-      "UPDATE projects SET title=?, description=?, images=? WHERE id=?",
-      [title, description, JSON.stringify([imagePath]), req.params.id]
-    );
-
-    res.json({ message: "✅ Project updated successfully" });
-  } catch (err) {
-    res.status(500).json({ message: "Server error updating project" });
-  }
+    let path = req.file ? `/uploads/projects/${req.file.filename}` : req.body.image_url;
+    await db.query("UPDATE projects SET title=?, description=?, images=? WHERE id=?", 
+    [title, description, JSON.stringify([path]), req.params.id]);
+    res.json({ message: "Updated" });
+  } catch (err) { res.status(500).json({ message: "Error" }); }
 });
 
-// ✅ DELETE project
 router.delete("/:id", auth, async (req, res) => {
-  try {
-    await db.query("DELETE FROM projects WHERE id=?", [req.params.id]);
-    res.json({ message: "✅ Deleted successfully" });
-  } catch (err) {
-    res.status(500).json({ message: "Server error deleting project" });
-  }
+  await db.query("DELETE FROM projects WHERE id=?", [req.params.id]);
+  res.json({ message: "Deleted" });
 });
 
 export default router;
