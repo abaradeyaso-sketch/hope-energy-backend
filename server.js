@@ -1,5 +1,5 @@
 // ==========================================================
-// 🌞 Hope Energy Backend Server (Cloudinary Integrated)
+// 🌞 Hope Energy Backend Server (Local Storage Mode)
 // ==========================================================
 
 import express from "express";
@@ -7,7 +7,6 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import { v2 as cloudinary } from 'cloudinary'; // 1. Added Cloudinary
 import helmet from "helmet"; 
 import db from "./config/db.js";
 
@@ -30,15 +29,6 @@ import adminProjects from "./routes/admin/projects.js";
 
 dotenv.config();
 const app = express();
-
-// ==========================================================
-// ⚙️ Cloudinary Configuration
-// ==========================================================
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
 
 // ==========================================================
 // 🛡️ Middleware
@@ -70,13 +60,12 @@ app.use(cors({
 app.use(express.json());
 
 // ==========================================================
-// 📂 Static & File Pathing
+// 📂 Static File Pathing (For Partner & Team Images)
 // ==========================================================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// NOTE: We keep this temporarily so old local images don't break immediately,
-// but new uploads will go to Cloudinary.
+// This serves your /uploads/partners and /uploads/team folders
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ==========================================================
@@ -102,7 +91,7 @@ app.use("/api/contact", contactRoute);
 app.use("/api/services", servicesRoute);
 app.use("/api/about", aboutRoute);
 
-// Admin Routes (These will need the upload middleware in their respective files)
+// Admin Routes
 app.use("/api/admin/auth", adminAuth);
 app.use("/api/admin/services", adminServices);
 app.use("/api/admin/partners", adminPartners);
@@ -114,7 +103,7 @@ app.use("/api/admin/news", adminNews);
 app.use("/api/admin/projects", adminProjects);
 
 app.get("/", (req, res) => {
-  res.send("🌞 Hope Energy Backend with Cloudinary is Live!");
+  res.send("🌞 Hope Energy Backend is Live!");
 });
 
 const PORT = process.env.PORT || 4000;
