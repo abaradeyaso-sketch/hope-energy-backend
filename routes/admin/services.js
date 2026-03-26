@@ -17,16 +17,16 @@ const upload = multer({ storage });
 
 const formatImageURL = (req, imagePath) => {
   if (!imagePath) return null;
-  return `https://${req.get("host")}${imagePath.startsWith("/") ? imagePath : "/" + imagePath}`;
+  return `https://${req.get("host")}${imagePath.startsWith("/") ? "" : "/"}${imagePath}`;
 };
 
-// ✅ GET: PUBLIC (REMOVED 'auth' to fix 401)
+// ✅ GET: Public (REMOVED auth to fix 401)
 router.get("/", async (req, res) => {
   try {
     const [rows] = await db.query("SELECT * FROM services ORDER BY id DESC");
-    const formatted = rows.map((s) => ({
+    const formatted = rows.map(s => ({
       ...s,
-      image_url: formatImageURL(req, s.image_url),
+      image_url: formatImageURL(req, s.image_url)
     }));
     res.json(formatted);
   } catch (err) {
@@ -34,25 +34,25 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ POST, PUT, DELETE: Keep 'auth'
+// ✅ POST: Admin Only
 router.post("/", auth, upload.single("image"), async (req, res) => {
   try {
     const { title, description } = req.body;
-    const path = req.file ? `/uploads/services/${req.file.filename}` : null;
+    const imgPath = req.file ? `/uploads/services/${req.file.filename}` : null;
     await db.query("INSERT INTO services (title, description, image_url) VALUES (?, ?, ?)", 
-    [title, description, path]);
+    [title, description, imgPath]);
     res.json({ message: "Service Added" });
-  } catch (err) { res.status(500).json({ message: "Error" }); }
+  } catch (err) { res.status(500).json({ message: "Server error" }); }
 });
 
 router.put("/:id", auth, upload.single("image"), async (req, res) => {
   try {
     const { title, description } = req.body;
-    let path = req.file ? `/uploads/services/${req.file.filename}` : req.body.image_url;
+    let imgPath = req.file ? `/uploads/services/${req.file.filename}` : req.body.image_url;
     await db.query("UPDATE services SET title=?, description=?, image_url=? WHERE id=?", 
-    [title, description, path, req.params.id]);
+    [title, description, imgPath, req.params.id]);
     res.json({ message: "Updated" });
-  } catch (err) { res.status(500).json({ message: "Error" }); }
+  } catch (err) { res.status(500).json({ message: "Server error" }); }
 });
 
 router.delete("/:id", auth, async (req, res) => {
