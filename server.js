@@ -1,7 +1,6 @@
 // ==========================================================
 // 🌞 Hope Energy Backend Server (Full Corrected Version)
 // ==========================================================
-
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -10,32 +9,25 @@ import { fileURLToPath } from "url";
 import helmet from "helmet"; 
 import db from "./config/db.js";
 
-// ✅ Route Imports
-import projectsRoute from "./routes/admin/projects.js"; // Unified
-import newsRoute from "./routes/admin/news.js";         // Unified
+// ✅ Route Imports - Pointing to unified logic
+import projectsRoute from "./routes/admin/projects.js"; 
+import newsRoute from "./routes/admin/news.js";         
+import servicesRoute from "./routes/admin/services.js"; 
+import teamMembersRoute from "./routes/admin/team_members.js";
 import contactRoute from "./routes/contact.js";
-import servicesRoute from "./routes/admin/services.js"; // Unified
 import aboutRoute from "./routes/aboutRoutes.js";
 
 import adminAuth from "./routes/admin/auth.js";
-import adminServices from "./routes/admin/services.js";
 import adminPartners from "./routes/admin/partners.js";
-import adminTeamMembers from "./routes/admin/team_members.js";
 import adminTestimonials from "./routes/admin/testimonials.js";
 import adminAboutInfo from "./routes/admin/about_info.js";
 import adminContactSubmissions from "./routes/admin/contact_submissions.js";
-import adminNews from "./routes/admin/news.js";
-import adminProjects from "./routes/admin/projects.js";
 
 dotenv.config();
 const app = express();
 
-// ==========================================================
 // 🛡️ Middleware
-// ==========================================================
-app.use(helmet({
-  crossOriginResourcePolicy: false, 
-}));
+app.use(helmet({ crossOriginResourcePolicy: false }));
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -45,8 +37,7 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || origin === process.env.FRONTEND_URL) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin === process.env.FRONTEND_URL) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -59,17 +50,12 @@ app.use(cors({
 
 app.use(express.json());
 
-// ==========================================================
 // 📂 Static File Pathing
-// ==========================================================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// ==========================================================
-// 🧠 Database Connectivity (TiDB Cloud)
-// ==========================================================
+// 🧠 Database Connectivity
 const checkConnection = async () => {
   try {
     await db.query("SELECT 1");
@@ -81,32 +67,26 @@ const checkConnection = async () => {
 };
 checkConnection();
 
-// ==========================================================
-// 🌐 API Routes (Unified for Public & Admin)
-// ==========================================================
-
-// Public & Admin Routes (Pointing to the same logic files)
+// 🌐 API Routes (Unified)
 app.use("/api/projects", projectsRoute);
 app.use("/api/news", newsRoute);
-app.use("/api/contact", contactRoute);
 app.use("/api/services", servicesRoute);
+app.use("/api/team_members", teamMembersRoute);
+app.use("/api/contact", contactRoute);
 app.use("/api/about", aboutRoute);
 
+// Admin Specific
 app.use("/api/admin/auth", adminAuth);
 app.use("/api/admin/services", servicesRoute);
 app.use("/api/admin/partners", adminPartners);
-app.use("/api/admin/team_members", adminTeamMembers);
+app.use("/api/admin/team_members", teamMembersRoute);
 app.use("/api/admin/testimonials", adminTestimonials);
 app.use("/api/admin/about_info", adminAboutInfo);
 app.use("/api/admin/contact_submissions", adminContactSubmissions);
 app.use("/api/admin/news", newsRoute);
 app.use("/api/admin/projects", projectsRoute);
 
-app.get("/", (req, res) => {
-  res.send("🌞 Hope Energy Backend is Live!");
-});
+app.get("/", (req, res) => res.send("🌞 Hope Energy Backend is Live!"));
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
