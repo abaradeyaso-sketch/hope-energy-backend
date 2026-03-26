@@ -1,5 +1,5 @@
 // ==========================================================
-// 🌞 Hope Energy Backend Server (Local Storage Mode)
+// 🌞 Hope Energy Backend Server (Production Corrected Version)
 // ==========================================================
 
 import express from "express";
@@ -37,16 +37,19 @@ app.use(helmet({
   crossOriginResourcePolicy: false, 
 }));
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "https://hope-energy-frontend-rho.vercel.app"
-];
-
+// ✅ UPDATED CORS: Automatically allows your Vercel URL
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || origin === process.env.FRONTEND_URL) {
+    
+    // Check if it's local or your specific Vercel URL
+    const allowed = [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "https://hope-energy-frontend-rho.vercel.app"
+    ];
+    
+    if (allowed.includes(origin) || origin.endsWith("vercel.app")) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -60,12 +63,10 @@ app.use(cors({
 app.use(express.json());
 
 // ==========================================================
-// 📂 Static File Pathing (For Partner & Team Images)
+// 📂 Static File Pathing
 // ==========================================================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// This serves your /uploads/partners and /uploads/team folders
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ==========================================================
@@ -85,6 +86,7 @@ checkConnection();
 // ==========================================================
 // 🌐 API Routes
 // ==========================================================
+// Use unified routes for public and admin where logic is shared
 app.use("/api/projects", projectsRoute);
 app.use("/api/news", newsRoute);
 app.use("/api/contact", contactRoute);
