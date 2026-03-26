@@ -3,17 +3,20 @@ import db from "../../config/db.js";
 import auth from "../../middleware/auth.js";
 import multer from "multer";
 import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import fs from "fs"; // Needed to create folders
 
 const router = express.Router();
 
-// ✅ Use diskStorage to keep original extensions and unique names
+// ✅ 1. Ensure News upload folder exists (Fixes Render crashes)
+const uploadDir = path.join(process.cwd(), "uploads/news");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// ✅ 2. Use diskStorage (Partner Logic)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, "../../uploads/news"));
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueName = Date.now() + path.extname(file.originalname);
@@ -26,18 +29,29 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-// ✅ Get all news
+// ✅ 3. Helper to format full image URL (Fixes Vercel/HTTPS issues)
+const formatImageURL = (req, imagePath) => {
+  if (!imagePath) return null;
+  if (imagePath.startsWith("http")) return imagePath;
+  return `https://${req.get("host")}${imagePath}`;
+};
+
+// ✅ GET all news
 router.get("/", auth, async (req, res) => {
   try {
     const [rows] = await db.query("SELECT * FROM news ORDER BY id DESC");
-    res.json(rows);
+    const formatted = rows.map(n => ({
+      ...n,
+      image_url: formatImageURL(req, n.image_url)
+    }));
+    res.json(formatted);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-// ✅ Add new news (with optional image)
+// ✅ Add new news
 router.post("/", auth, upload.single("image"), async (req, res) => {
   try {
     const { title, content, author, is_published = 1 } = req.body;
@@ -48,48 +62,34 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
       [title, content, author, image_url, is_published]
     );
 
-    const [rows] = await db.query("SELECT * FROM news WHERE id = ?", [
-      result.insertId,
-    ]);
-    res.json(rows[0]);
+    res.json({
+      id: result.insertId,
+      title,
+      content,
+      author,
+      image_url: formatImageURL(req, image_url),
+      is_published
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-// ✅ Get a single news item
-router.get("/:id", auth, async (req, res) => {
-  try {
-    const [rows] = await db.query("SELECT * FROM news WHERE id = ?", [
-      req.params.id,
-    ]);
-    res.json(rows[0] || null);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// ✅ Update news (optionally update image)
+// ✅ Update news
 router.put("/:id", auth, upload.single("image"), async (req, res) => {
   try {
     const { title, content, author, is_published = 1 } = req.body;
-    let image_url = req.file ? `/uploads/news/${req.file.filename}` : null;
+    
+    // logic: If a new file is uploaded, use it. Otherwise, keep the old one from req.body.image_url
+    let image_url = req.file ? `/uploads/news/${req.file.filename}` : req.body.image_url;
 
-    const query = image_url
-      ? "UPDATE news SET title = ?, content = ?, author = ?, image_url = ?, is_published = ? WHERE id = ?"
-      : "UPDATE news SET title = ?, content = ?, author = ?, is_published = ? WHERE id = ?";
-    const params = image_url
-      ? [title, content, author, image_url, is_published, req.params.id]
-      : [title, content, author, is_published, req.params.id];
+    await db.query(
+      "UPDATE news SET title = ?, content = ?, author = ?, image_url = ?, is_published = ? WHERE id = ?",
+      [title, content, author, image_url, is_published, req.params.id]
+    );
 
-    await db.query(query, params);
-
-    const [rows] = await db.query("SELECT * FROM news WHERE id = ?", [
-      req.params.id,
-    ]);
-    res.json(rows[0]);
+    res.json({ message: "Updated successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
@@ -102,7 +102,6 @@ router.delete("/:id", auth, async (req, res) => {
     await db.query("DELETE FROM news WHERE id = ?", [req.params.id]);
     res.json({ message: "Deleted" });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
