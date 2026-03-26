@@ -3,41 +3,35 @@ import db from "../../config/db.js";
 import auth from "../../middleware/auth.js";
 import multer from "multer";
 import path from "path";
-import fs from "fs"; // Needed to create folders
+import fs from "fs";
 
 const router = express.Router();
 
-// ✅ 1. Ensure News upload folder exists (Fixes Render crashes)
+// ✅ 1. Folder Management
 const uploadDir = path.join(process.cwd(), "uploads/news");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// ✅ 2. Use diskStorage (Partner Logic)
+// ✅ 2. Multer Setup
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
+  destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
-    const uniqueName = Date.now() + path.extname(file.originalname);
-    cb(null, uniqueName);
+    cb(null, Date.now() + path.extname(file.originalname));
   },
 });
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
-});
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
-// ✅ 3. Helper to format full image URL (Fixes Vercel/HTTPS issues)
+// ✅ 3. Helper for HTTPS URLs
 const formatImageURL = (req, imagePath) => {
   if (!imagePath) return null;
   if (imagePath.startsWith("http")) return imagePath;
   return `https://${req.get("host")}${imagePath}`;
 };
 
-// ✅ GET all news
-router.get("/", auth, async (req, res) => {
+// ✅ GET all news (Removed 'auth' so public can see)
+router.get("/", async (req, res) => {
   try {
     const [rows] = await db.query("SELECT * FROM news ORDER BY id DESC");
     const formatted = rows.map(n => ({
@@ -46,12 +40,11 @@ router.get("/", auth, async (req, res) => {
     }));
     res.json(formatted);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-// ✅ Add new news
+// ✅ Add news
 router.post("/", auth, upload.single("image"), async (req, res) => {
   try {
     const { title, content, author, is_published = 1 } = req.body;
@@ -64,14 +57,9 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
 
     res.json({
       id: result.insertId,
-      title,
-      content,
-      author,
-      image_url: formatImageURL(req, image_url),
-      is_published
+      image_url: formatImageURL(req, image_url)
     });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -80,8 +68,6 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
 router.put("/:id", auth, upload.single("image"), async (req, res) => {
   try {
     const { title, content, author, is_published = 1 } = req.body;
-    
-    // logic: If a new file is uploaded, use it. Otherwise, keep the old one from req.body.image_url
     let image_url = req.file ? `/uploads/news/${req.file.filename}` : req.body.image_url;
 
     await db.query(
@@ -91,12 +77,10 @@ router.put("/:id", auth, upload.single("image"), async (req, res) => {
 
     res.json({ message: "Updated successfully" });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-// ✅ Delete news
 router.delete("/:id", auth, async (req, res) => {
   try {
     await db.query("DELETE FROM news WHERE id = ?", [req.params.id]);
