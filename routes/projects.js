@@ -6,7 +6,7 @@ import auth from "../middleware/auth.js";
 
 const router = express.Router();
 
-// 🖼 Configure file upload for project images
+// 🖼 Configure file upload
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, "uploads/projects/");
@@ -19,27 +19,47 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+/**
+ * Helper function to format response
+ * Ensures the image path is always absolute and uses the correct protocol
+ */
+const formatProjectResponse = (req, project) => {
+  if (project.images && !project.images.startsWith('http')) {
+    // req.protocol will be 'https' on Render if 'trust proxy' is enabled in server.js
+    const protocol = req.protocol === 'http' && req.get('x-forwarded-proto') 
+                     ? 'https' 
+                     : req.protocol;
+    
+    project.images = `${protocol}://${req.get('host')}${project.images}`;
+  }
+  return project;
+};
+
 /* ===========================
-   🌍 Public Routes
+    🌍 Public Routes
 =========================== */
 
-// ➤ Get all projects (public)
+// ➤ Get all projects
 router.get("/", async (req, res) => {
   try {
     const [rows] = await db.query("SELECT * FROM projects ORDER BY id DESC");
-    res.json(rows);
+    // Map through rows to fix image URLs dynamically
+    const formattedRows = rows.map(row => formatProjectResponse(req, row));
+    res.json(formattedRows);
   } catch (err) {
     console.error("❌ Get projects error:", err);
     res.status(500).json({ message: "Failed to fetch projects" });
   }
 });
 
-// ➤ Get single project by ID (public)
+// ➤ Get single project by ID
 router.get("/:id", async (req, res) => {
   try {
     const [rows] = await db.query("SELECT * FROM projects WHERE id = ?", [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ message: "Project not found" });
-    res.json(rows[0]);
+    
+    const formattedProject = formatProjectResponse(req, rows[0]);
+    res.json(formattedProject);
   } catch (err) {
     console.error("❌ Get single project error:", err);
     res.status(500).json({ message: "Failed to fetch project" });
@@ -47,13 +67,14 @@ router.get("/:id", async (req, res) => {
 });
 
 /* ===========================
-   🔐 Admin Protected Routes
+    🔐 Admin Protected Routes
 =========================== */
 
 // ➕ Add new project
 router.post("/", auth, upload.single("image"), async (req, res) => {
   try {
     const { title, description } = req.body;
+    // Store only the relative path in the database
     const imagePath = req.file ? `/uploads/projects/${req.file.filename}` : null;
 
     const [result] = await db.query(
@@ -61,7 +82,8 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
       [title, description, imagePath]
     );
 
-    res.json({ id: result.insertId, title, description, images: imagePath });
+    const newProject = { id: result.insertId, title, description, images: imagePath };
+    res.json(formatProjectResponse(req, newProject));
   } catch (err) {
     console.error("❌ Add project error:", err);
     res.status(500).json({ message: "Failed to add project" });
@@ -72,10 +94,10 @@ router.post("/", auth, upload.single("image"), async (req, res) => {
 router.put("/:id", auth, upload.single("image"), async (req, res) => {
   try {
     const { title, description } = req.body;
-    let query, params;
+    let query, params, imagePath;
 
     if (req.file) {
-      const imagePath = `/uploads/projects/${req.file.filename}`;
+      imagePath = `/uploads/projects/${req.file.filename}`;
       query = "UPDATE projects SET title = ?, description = ?, images = ? WHERE id = ?";
       params = [title, description, imagePath, req.params.id];
     } else {
