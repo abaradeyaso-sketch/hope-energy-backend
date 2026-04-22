@@ -1,9 +1,13 @@
+// ==========================================================
+// 🌞 Hope Energy Backend Server (Production Corrected Version)
+// ==========================================================
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import helmet from "helmet"; 
+import helmet from "helmet"; 
 import db from "./config/db.js";
 
 // ✅ Route Imports
@@ -27,39 +31,33 @@ dotenv.config();
 const app = express();
 
 // ==========================================================
-// 🛡️ Security & Proxy Configuration
+// 🛡️ Middleware
 // ==========================================================
-
-/** * CRITICAL FIX: Trust the proxy (Render/Vercel) to detect HTTPS.
- * This ensures req.protocol returns 'https' and removes Mixed Content warnings.
- */
-app.set("trust proxy", 1); 
-
 app.use(helmet({
-  crossOriginResourcePolicy: false, // Allows images to be loaded by your frontend
-  contentSecurityPolicy: false      // Optional: helpful if you have complex image sources
+  crossOriginResourcePolicy: false, 
 }));
 
-// ✅ UPDATED CORS
+// ✅ UPDATED CORS: Automatically allows your Vercel URL
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    
-    const allowed = [
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "https://hope-energy-frontend-rho.vercel.app"
-    ];
-    
-    if (allowed.includes(origin) || origin.endsWith("vercel.app")) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    
+    // Check if it's local or your specific Vercel URL
+    const allowed = [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "https://hope-energy-frontend-rho.vercel.app"
+    ];
+    
+    if (allowed.includes(origin) || origin.endsWith("vercel.app")) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 app.use(express.json());
@@ -69,30 +67,26 @@ app.use(express.json());
 // ==========================================================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-/**
- * We serve the uploads folder. 
- * Note: Use absolute paths to prevent issues during deployment.
- */
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ==========================================================
 // 🧠 Database Connectivity (TiDB Cloud)
 // ==========================================================
 const checkConnection = async () => {
-  try {
-    await db.query("SELECT 1");
-    console.log("✅ TiDB Cloud connected successfully!");
-  } catch (err) {
-    console.error("❌ TiDB Connection Error:", err.message);
-    setTimeout(checkConnection, 5000);
-  }
+  try {
+    await db.query("SELECT 1");
+    console.log("✅ TiDB Cloud connected successfully!");
+  } catch (err) {
+    console.error("❌ TiDB Connection Error:", err.message);
+    setTimeout(checkConnection, 5000);
+  }
 };
 checkConnection();
 
 // ==========================================================
 // 🌐 API Routes
 // ==========================================================
+// Use unified routes for public and admin where logic is shared
 app.use("/api/projects", projectsRoute);
 app.use("/api/news", newsRoute);
 app.use("/api/contact", contactRoute);
@@ -111,10 +105,10 @@ app.use("/api/admin/news", adminNews);
 app.use("/api/admin/projects", adminProjects);
 
 app.get("/", (req, res) => {
-  res.send("🌞 Hope Energy Backend is Live!");
+  res.send("🌞 Hope Energy Backend is Live!");
 });
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
