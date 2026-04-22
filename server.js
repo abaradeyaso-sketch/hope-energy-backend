@@ -1,7 +1,3 @@
-// ==========================================================
-// 🌞 Hope Energy Backend Server (Production Corrected Version)
-// ==========================================================
-
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -31,18 +27,24 @@ dotenv.config();
 const app = express();
 
 // ==========================================================
-// 🛡️ Middleware
+// 🛡️ Security & Proxy Configuration
 // ==========================================================
+
+/** * CRITICAL FIX: Trust the proxy (Render/Vercel) to detect HTTPS.
+ * This ensures req.protocol returns 'https' and removes Mixed Content warnings.
+ */
+app.set("trust proxy", 1); 
+
 app.use(helmet({
-  crossOriginResourcePolicy: false, 
+  crossOriginResourcePolicy: false, // Allows images to be loaded by your frontend
+  contentSecurityPolicy: false      // Optional: helpful if you have complex image sources
 }));
 
-// ✅ UPDATED CORS: Automatically allows your Vercel URL
+// ✅ UPDATED CORS
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
     
-    // Check if it's local or your specific Vercel URL
     const allowed = [
       "http://localhost:5173",
       "http://localhost:3000",
@@ -67,6 +69,11 @@ app.use(express.json());
 // ==========================================================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/**
+ * We serve the uploads folder. 
+ * Note: Use absolute paths to prevent issues during deployment.
+ */
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ==========================================================
@@ -86,7 +93,6 @@ checkConnection();
 // ==========================================================
 // 🌐 API Routes
 // ==========================================================
-// Use unified routes for public and admin where logic is shared
 app.use("/api/projects", projectsRoute);
 app.use("/api/news", newsRoute);
 app.use("/api/contact", contactRoute);
